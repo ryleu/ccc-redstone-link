@@ -92,7 +92,6 @@ public class RedstoneLinkBridgeBlockEntity extends BlockEntity {
     public void sendLinkSignal(ItemStack first, ItemStack last, int strength) {
         ItemStack normalizedFirst = normalize(first);
         ItemStack normalizedLast = normalize(last);
-        if (normalizedFirst.isEmpty() || normalizedLast.isEmpty()) return;
 
         String key = channelKey(normalizedFirst, normalizedLast);
         RedstoneLinkChannel channel = this.channels.get(key);
@@ -236,11 +235,9 @@ public class RedstoneLinkBridgeBlockEntity extends BlockEntity {
             // Legacy single-channel format from the original mod (pre-1.0.4)
             ItemStack frequencyFirst = fromFrequencyId(tag.getString("FrequencyFirst"));
             ItemStack frequencyLast  = fromFrequencyId(tag.getString("FrequencyLast"));
-            if (!frequencyFirst.isEmpty() && !frequencyLast.isEmpty()) {
-                RedstoneLinkChannel channel = new RedstoneLinkChannel(
-                        frequencyFirst, frequencyLast, tag.getInt("Transmit"));
-                this.channels.put(channel.key(), channel);
-            }
+            RedstoneLinkChannel channel = new RedstoneLinkChannel(
+                    frequencyFirst, frequencyLast, tag.getInt("Transmit"));
+            this.channels.put(channel.key(), channel);
         }
     }
 
@@ -270,7 +267,6 @@ public class RedstoneLinkBridgeBlockEntity extends BlockEntity {
             }
         }
 
-        if (frequencyFirst.isEmpty() || frequencyLast.isEmpty()) return null;
         return new RedstoneLinkChannel(frequencyFirst, frequencyLast, tag.getInt("Transmit"));
     }
 
