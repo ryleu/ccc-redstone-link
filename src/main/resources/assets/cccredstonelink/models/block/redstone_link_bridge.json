@@ -6,8 +6,8 @@
 	"texture_size": [32, 32],
 	"textures": {
 		"redstone_antenna": "create:block/redstone_antenna",
-		"particle": "ccredstonelinkbridge:block/redstone_link_bridge",
-		"redstone_bridge": "ccredstonelinkbridge:block/redstone_link_bridge"
+		"particle": "cccredstonelink:block/redstone_link_bridge",
+		"redstone_bridge": "cccredstonelink:block/redstone_link_bridge"
 	},
 	"elements": [
 		{

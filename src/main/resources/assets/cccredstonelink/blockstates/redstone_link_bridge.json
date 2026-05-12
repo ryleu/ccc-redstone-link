@@ -1,5 +1,5 @@
 {
   "variants": {
-    "": { "model": "ccredstonelinkbridge:block/redstone_link_bridge" }
+    "": { "model": "cccredstonelink:block/redstone_link_bridge" }
   }
 }

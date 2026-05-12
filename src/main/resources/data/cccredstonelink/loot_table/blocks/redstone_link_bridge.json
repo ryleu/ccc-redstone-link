@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "ccredstonelinkbridge:redstone_link_bridge"
+          "name": "cccredstonelink:redstone_link_bridge"
         }
       ],
       "conditions": [
