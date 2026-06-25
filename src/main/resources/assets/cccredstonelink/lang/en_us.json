@@ -1,4 +1,6 @@
 {
   "block.cccredstonelink.redstone_link_bridge": "CC Redstone Link Bridge",
-  "item.cccredstonelink.redstone_link_bridge": "CC Redstone Link Bridge"
+  "item.cccredstonelink.redstone_link_bridge": "CC Redstone Link Bridge",
+  "upgrade.cccredstonelink.redstone_link_pocket.adjective": "Redstone Link",
+  "upgrade.cccredstonelink.redstone_link_turtle.adjective": "Redstone Link"
 }

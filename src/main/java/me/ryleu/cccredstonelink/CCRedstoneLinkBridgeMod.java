@@ -1,7 +1,10 @@
 package me.ryleu.cccredstonelink;
 
+import dan200.computercraft.api.client.turtle.RegisterTurtleModellersEvent;
+import dan200.computercraft.api.client.turtle.TurtleUpgradeModeller;
 import dan200.computercraft.api.peripheral.PeripheralCapability;
 import net.minecraft.world.item.CreativeModeTabs;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -15,6 +18,7 @@ public class CCRedstoneLinkBridgeMod {
         ModBlocks.register(modBus);
         ModBlockEntities.register(modBus);
         ModItems.register(modBus);
+        CCRegistration.register(modBus);
         modBus.addListener(this::addCreativeTabs);
         modBus.addListener(this::registerCapabilities);
     }
@@ -32,5 +36,17 @@ public class CCRedstoneLinkBridgeMod {
                 (blockEntity, side) -> new RedstoneLinkBridgePeripheral(blockEntity)
         );
     }
-}
 
+    @Mod(value = MOD_ID, dist = Dist.CLIENT)
+    public static final class Client {
+        public Client(IEventBus modBus) {
+            modBus.addListener(Client::registerTurtleModellers);
+        }
+
+        private static void registerTurtleModellers(RegisterTurtleModellersEvent event) {
+            // Placeholder: use the bridge item flat on the turtle's side until a proper
+            // 3D upgrade model lands.
+            event.register(CCRegistration.REDSTONE_LINK_TURTLE.get(), TurtleUpgradeModeller.flatItem());
+        }
+    }
+}
