@@ -3,6 +3,7 @@ package me.ryleu.cccredstonelink;
 import com.simibubi.create.Create;
 import com.simibubi.create.content.redstone.link.IRedstoneLinkable;
 import com.simibubi.create.content.redstone.link.RedstoneLinkNetworkHandler;
+import com.simibubi.create.infrastructure.config.AllConfigs;
 import net.createmod.catnip.data.Couple;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -78,11 +79,19 @@ public final class RedstoneLinkChannelHost {
                 RedstoneLinkNetworkHandler.Frequency.of(normalize(last))
         );
 
-        int power = 0;
         Set<?> network = Create.REDSTONE_LINK_NETWORK_HANDLER.networksIn(level).get(key);
         if (network == null) return 0;
+
+        // Match Create's own range-gating: only transmitters within linkRange of
+        // this bridge's position contribute. Without this, getLinkSignal would
+        // pick up transmitters that Create's normal receivers correctly ignore.
+        BlockPos here = owner.pos();
+        int range = AllConfigs.server().logistics.linkRange.get();
+
+        int power = 0;
         for (Object obj : network) {
             IRedstoneLinkable linkable = (IRedstoneLinkable) obj;
+            if (!here.closerThan(linkable.getLocation(), range)) continue;
             power = Math.max(power, linkable.getTransmittedStrength());
             if (power >= 15) return 15;
         }
