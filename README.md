@@ -26,9 +26,11 @@ The mod is intentionally minimal. The Lua interface only exposes the operations 
 When the peripheral is used from Lua:
 
 - `getLinkSignal(freq1, freq2)` looks up the current strength for that frequency pair.
+- `watchLinkSignal(freq1, freq2)` subscribes the attached computer to change events for that frequency pair.
+- `unwatchLinkSignal(freq1, freq2)` removes that subscription.
 - `sendLinkSignal(freq1, freq2, strength)` sets the target frequency pair and transmits the chosen strength.
 
-Both functions accept two optional trailing arguments, `color1` and `color2`, which apply a dye color to the corresponding frequency slot.
+All four functions accept two optional trailing arguments, `color1` and `color2`, which apply a dye color to the corresponding frequency slot.
 The frequency values are item IDs written as strings. For example, `minecraft:iron_ingot` and `minecraft:oak_sapling` form one valid pair.
 
 ## Crafting Recipe
@@ -44,7 +46,39 @@ Peripheral type:
 Methods:
 
 - `getLinkSignal(freq1, freq2 [, color1 [, color2]])` -> `number`
+- `watchLinkSignal(freq1, freq2 [, color1 [, color2]])` -> `number`
+- `unwatchLinkSignal(freq1, freq2 [, color1 [, color2]])`
 - `sendLinkSignal(freq1, freq2, strength [, color1 [, color2]])`
+
+
+### Redstone Link Change Events
+
+Call `watchLinkSignal(...)` once for each frequency pair you want to monitor. It returns the current signal immediately, then queues a ComputerCraft event whenever Create reports a different received signal for that pair.
+
+Event shape:
+
+```lua
+"redstone_link_change", freq1, freq2, newStrength, oldStrength, color1, color2
+```
+
+`color1` and `color2` are `nil` for uncolored frequency slots.
+
+Example:
+
+```lua
+local bridge = peripheral.find("redstone_link_bridge")
+assert(bridge, "No redstone_link_bridge found")
+
+local current = bridge.watchLinkSignal("minecraft:diamond", "minecraft:redstone")
+print("Initial signal:", current)
+
+while true do
+    local _, freq1, freq2, newStrength, oldStrength = os.pullEvent("redstone_link_change")
+    print(freq1, freq2, oldStrength, "->", newStrength)
+end
+```
+
+Use `unwatchLinkSignal(...)` with the same arguments when the computer no longer needs events for that frequency pair.
 
 ### Frequency Values
 
