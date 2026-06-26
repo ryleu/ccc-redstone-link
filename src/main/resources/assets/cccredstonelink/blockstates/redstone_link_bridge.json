@@ -1,5 +1,10 @@
 {
   "variants": {
-    "": { "model": "cccredstonelink:block/redstone_link_bridge" }
+    "facing=up":    { "model": "cccredstonelink:block/redstone_link_bridge" },
+    "facing=down":  { "model": "cccredstonelink:block/redstone_link_bridge", "x": 180 },
+    "facing=north": { "model": "cccredstonelink:block/redstone_link_bridge", "x": 90 },
+    "facing=south": { "model": "cccredstonelink:block/redstone_link_bridge", "x": 90, "y": 180 },
+    "facing=east":  { "model": "cccredstonelink:block/redstone_link_bridge", "x": 90, "y": 90 },
+    "facing=west":  { "model": "cccredstonelink:block/redstone_link_bridge", "x": 90, "y": 270 }
   }
 }
