@@ -1,5 +1,6 @@
 package me.ryleu.cccredstonelink;
 
+import dan200.computercraft.api.peripheral.IComputerAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -12,10 +13,13 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.NonNull;
 
 import javax.annotation.Nullable;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RedstoneLinkBridgeBlockEntity extends BlockEntity {
 
     private final RedstoneLinkChannelHost channelHost;
+    private final Set<IComputerAccess> computers = ConcurrentHashMap.newKeySet();
 
     public RedstoneLinkBridgeBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.REDSTONE_LINK_BRIDGE.get(), pos, state);
@@ -44,6 +48,28 @@ public class RedstoneLinkBridgeBlockEntity extends BlockEntity {
 
     public void sendLinkSignal(ItemStack first, ItemStack last, int strength) {
         channelHost.sendLinkSignal(first, last, strength);
+    }
+
+    public int watchLinkSignal(ItemStack first, ItemStack last) {
+        return channelHost.watchLinkSignal(first, last);
+    }
+
+    public void unwatchLinkSignal(ItemStack first, ItemStack last) {
+        channelHost.unwatchLinkSignal(first, last);
+    }
+
+    void attachComputer(IComputerAccess computer) {
+        computers.add(computer);
+    }
+
+    void detachComputer(IComputerAccess computer) {
+        computers.remove(computer);
+    }
+
+    private void queueEvent(String event, Object... arguments) {
+        for (IComputerAccess computer : computers) {
+            computer.queueEvent(event, arguments);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -106,6 +132,11 @@ public class RedstoneLinkBridgeBlockEntity extends BlockEntity {
         @Override
         public void markDirty() {
             RedstoneLinkBridgeBlockEntity.this.setChanged();
+        }
+
+        @Override
+        public void queueEvent(String event, Object... arguments) {
+            RedstoneLinkBridgeBlockEntity.this.queueEvent(event, arguments);
         }
     }
 }

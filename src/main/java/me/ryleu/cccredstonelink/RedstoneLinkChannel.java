@@ -24,15 +24,20 @@ final class RedstoneLinkChannel implements IRedstoneLinkable {
     private final ItemStack frequencyFirst;
     private final ItemStack frequencyLast;
     private int transmittedStrength;
+    private int receivedStrength;
+    private boolean listening;
+    private boolean transmitting;
 
     @Nullable
     private Level registeredLevel;
 
-    RedstoneLinkChannel(RedstoneLinkChannelHost host, ItemStack first, ItemStack last, int strength) {
+    RedstoneLinkChannel(RedstoneLinkChannelHost host, ItemStack first, ItemStack last, int strength, boolean listening, boolean transmitting) {
         this.host = host;
         this.frequencyFirst = RedstoneLinkChannelHost.normalize(first);
         this.frequencyLast = RedstoneLinkChannelHost.normalize(last);
         this.transmittedStrength = RedstoneLinkChannelHost.clampStrength(strength);
+        this.listening = listening;
+        this.transmitting = transmitting;
     }
 
     ItemStack frequencyFirst() { return frequencyFirst; }
@@ -77,15 +82,37 @@ final class RedstoneLinkChannel implements IRedstoneLinkable {
 
     void setTransmitStrength(int strength) {
         this.transmittedStrength = RedstoneLinkChannelHost.clampStrength(strength);
+        this.transmitting = true;
         host.markDirty();
         update();
     }
 
+    boolean isListeningChannel() { return listening; }
+
+    boolean shouldSave() { return transmitting; }
+
+    boolean shouldRemoveWhenNotListening() { return !transmitting; }
+
+    void setListening(boolean listening) {
+        this.listening = listening;
+    }
+
+    void setReceivedStrengthSilently(int power) {
+        this.receivedStrength = RedstoneLinkChannelHost.clampStrength(power);
+    }
+
     @Override public int getTransmittedStrength() { return transmittedStrength; }
 
-    @Override public void setReceivedStrength(int power) { /* transmit-only */ }
+    @Override
+    public void setReceivedStrength(int power) {
+        int newStrength = RedstoneLinkChannelHost.clampStrength(power);
+        if (newStrength == receivedStrength) return;
+        int oldStrength = receivedStrength;
+        receivedStrength = newStrength;
+        host.queueRedstoneLinkChange(frequencyFirst, frequencyLast, oldStrength, newStrength);
+    }
 
-    @Override public boolean isListening() { return false; }
+    @Override public boolean isListening() { return listening; }
 
     @Override public boolean isAlive() { return host.isAlive(); }
 

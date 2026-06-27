@@ -1,6 +1,7 @@
 package me.ryleu.cccredstonelink;
 
 import dan200.computercraft.api.lua.LuaFunction;
+import dan200.computercraft.api.peripheral.IComputerAccess;
 import dan200.computercraft.api.peripheral.IPeripheral;
 
 import net.minecraft.world.item.ItemStack;
@@ -124,9 +125,62 @@ public class RedstoneLinkBridgePeripheral implements IPeripheral {
         blockEntity.sendLinkSignal(first, last, strength);
     }
 
+
+    /**
+     * Starts listening for Create Redstone Link signal changes on a frequency.
+     *
+     * <p>When the signal changes, attached computers receive:
+     * <pre>
+     * redstone_link_change, freq1, freq2, newStrength, oldStrength, color1, color2
+     * </pre>
+     * Uncolored slots pass {@code nil} for their color.
+     *
+     * @return Current signal strength when the watch is registered.
+     */
+    @LuaFunction(mainThread = true)
+    public final int watchLinkSignal(
+            String frequency1,
+            String frequency2,
+            Optional<Integer> color1,
+            Optional<Integer> color2) {
+
+        ItemStack first = RedstoneLinkBridgeBlockEntity.fromFrequencySpec(
+                frequency1, color1.orElse(null));
+        ItemStack last  = RedstoneLinkBridgeBlockEntity.fromFrequencySpec(
+                frequency2, color2.orElse(null));
+
+        return blockEntity.watchLinkSignal(first, last);
+    }
+
+    /** Stops listening for Create Redstone Link signal changes on a frequency. */
+    @LuaFunction(mainThread = true)
+    public final void unwatchLinkSignal(
+            String frequency1,
+            String frequency2,
+            Optional<Integer> color1,
+            Optional<Integer> color2) {
+
+        ItemStack first = RedstoneLinkBridgeBlockEntity.fromFrequencySpec(
+                frequency1, color1.orElse(null));
+        ItemStack last  = RedstoneLinkBridgeBlockEntity.fromFrequencySpec(
+                frequency2, color2.orElse(null));
+
+        blockEntity.unwatchLinkSignal(first, last);
+    }
+
     // -------------------------------------------------------------------------
     // IPeripheral
     // -------------------------------------------------------------------------
+
+    @Override
+    public void attach(IComputerAccess computer) {
+        blockEntity.attachComputer(computer);
+    }
+
+    @Override
+    public void detach(IComputerAccess computer) {
+        blockEntity.detachComputer(computer);
+    }
 
     @Override
     public boolean equals(IPeripheral other) {

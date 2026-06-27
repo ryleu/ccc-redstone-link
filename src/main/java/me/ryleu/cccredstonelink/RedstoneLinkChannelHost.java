@@ -57,6 +57,9 @@ public final class RedstoneLinkChannelHost {
 
         /** Notify the host that channel state changed (block entity uses this to call setChanged). */
         default void markDirty() { }
+
+        /** Queue a ComputerCraft event on every attached computer. */
+        default void queueEvent(String event, Object... arguments) { }
     }
 
     private final LinkHost owner;
@@ -116,7 +119,7 @@ public final class RedstoneLinkChannelHost {
         Level level = owner.level();
 
         if (channel == null) {
-            channel = new RedstoneLinkChannel(this, normalizedFirst, normalizedLast, clampStrength(strength));
+            channel = new RedstoneLinkChannel(this, normalizedFirst, normalizedLast, clampStrength(strength), false, true);
             channels.put(key, channel);
             owner.markDirty();
             if (level != null && !level.isClientSide) {
@@ -126,7 +129,55 @@ public final class RedstoneLinkChannelHost {
             }
         } else {
             channel.setTransmitStrength(strength);
+            refreshReceivedStrength(channel, normalizedFirst, normalizedLast);
         }
+    }
+
+    public int watchLinkSignal(ItemStack first, ItemStack last) {
+        ItemStack normalizedFirst = normalize(first);
+        ItemStack normalizedLast = normalize(last);
+
+        String key = channelKey(normalizedFirst, normalizedLast);
+        RedstoneLinkChannel channel = channels.get(key);
+        Level level = owner.level();
+
+        if (channel == null) {
+            channel = new RedstoneLinkChannel(this, normalizedFirst, normalizedLast, 0, true, false);
+            channels.put(key, channel);
+            owner.markDirty();
+            if (level != null && !level.isClientSide) {
+                channel.register(level);
+                channel.update();
+                registeredLevel = level;
+            }
+        } else if (!channel.isListeningChannel()) {
+            channel.setListening(true);
+            owner.markDirty();
+            channel.update();
+        }
+
+        int current = getLinkSignal(normalizedFirst, normalizedLast);
+        channel.setReceivedStrengthSilently(current);
+        return current;
+    }
+
+    public void unwatchLinkSignal(ItemStack first, ItemStack last) {
+        RedstoneLinkChannel channel = channels.get(channelKey(normalize(first), normalize(last)));
+        if (channel == null || !channel.isListeningChannel()) return;
+        channel.setListening(false);
+        owner.markDirty();
+        if (channel.shouldRemoveWhenNotListening()) {
+            channel.unregister();
+            channels.remove(channel.key());
+        } else {
+            channel.update();
+        }
+    }
+
+
+    private void refreshReceivedStrength(RedstoneLinkChannel channel, ItemStack first, ItemStack last) {
+        if (!channel.isListeningChannel()) return;
+        channel.setReceivedStrength(getLinkSignal(first, last));
     }
 
     // ----- Lifecycle hooks for the owner -----
@@ -180,12 +231,23 @@ public final class RedstoneLinkChannelHost {
 
     void markDirty() { owner.markDirty(); }
 
+    void queueRedstoneLinkChange(ItemStack first, ItemStack last, int oldStrength, int newStrength) {
+        owner.queueEvent(
+                "redstone_link_change",
+                itemIdString(first),
+                itemIdString(last),
+                newStrength,
+                oldStrength,
+                dyeRgbOrNull(first),
+                dyeRgbOrNull(last));
+    }
+
     // ----- NBT (block entity uses these; mobile upgrades don't persist) -----
 
     public ListTag saveChannels(HolderLookup.Provider provider) {
         ListTag list = new ListTag();
         for (RedstoneLinkChannel channel : channels.values()) {
-            list.add(channel.save(provider));
+            if (channel.shouldSave()) list.add(channel.save(provider));
         }
         return list;
     }
@@ -201,7 +263,7 @@ public final class RedstoneLinkChannelHost {
 
     /** Load a single channel — split out so the legacy single-channel format can reuse it. */
     public void addLegacyChannel(ItemStack first, ItemStack last, int strength) {
-        RedstoneLinkChannel channel = new RedstoneLinkChannel(this, first, last, strength);
+        RedstoneLinkChannel channel = new RedstoneLinkChannel(this, first, last, strength, false, true);
         channels.put(channel.key(), channel);
     }
 
@@ -227,7 +289,7 @@ public final class RedstoneLinkChannelHost {
             }
         }
 
-        return new RedstoneLinkChannel(this, first, last, tag.getInt("Transmit"));
+        return new RedstoneLinkChannel(this, first, last, tag.getInt("Transmit"), false, true);
     }
 
     // ----- Shared item / frequency helpers -----
@@ -268,9 +330,14 @@ public final class RedstoneLinkChannelHost {
     }
 
     private static int dyeRgb(ItemStack stack) {
+        Integer rgb = dyeRgbOrNull(stack);
+        return rgb == null ? -1 : rgb;
+    }
+
+    private static Integer dyeRgbOrNull(ItemStack stack) {
         if (stack.has(DataComponents.DYED_COLOR))
             return Objects.requireNonNull(stack.get(DataComponents.DYED_COLOR)).rgb();
-        return -1;
+        return null;
     }
 
     private static String itemIdString(ItemStack stack) {
