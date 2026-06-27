@@ -99,6 +99,12 @@ final class RedstoneLinkChannel implements IRedstoneLinkable {
 
     @Override
     public BlockPos getLocation() {
+        // Convention: return the raw plot-local position. Sable's mixin on
+        // RedstoneLinkNetworkHandler.updateNetworkOf transforms this through
+        // the containing sub-level's pose itself, so applying the transform
+        // here would double-count (or skip the transform when we *are* on a
+        // contraption, depending on direction). Our own getLinkSignal does
+        // the equivalent transform on both ends explicitly.
         return host.pos();
     }
 }

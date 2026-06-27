@@ -44,6 +44,14 @@ repositories {
             includeGroup 'cc.tweaked'
         }
     }
+    maven {
+        name = 'RyanHCode Maven (Sable)'
+        url = 'https://maven.ryanhcode.dev/releases'
+        content {
+            includeGroup 'dev.ryanhcode.sable'
+            includeGroup 'dev.ryanhcode.sable-companion'
+        }
+    }
 }
 
 base {
@@ -124,6 +132,24 @@ dependencies {
     compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-common-api:${cc_tweaked_version}"
     compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cc_tweaked_version}"
 
+    // ---- Sable (optional) -------------------------------------------------
+    // compileOnly because Sable is an OPTIONAL runtime dep. Our code path that
+    // touches Sable types is isolated in SableImpl, which is only class-loaded
+    // when ModList reports sable is present at runtime.
+    //
+    // transitive = false: Sable's POM pulls in sable-companion and veil-neoforge
+    // (graphics lib), neither of which we need to compile against — we only
+    // reference dev.ryanhcode.sable.sublevel.SubLevel and Pose3d from the main
+    // jar. Skipping transitives avoids hauling in extra maven repos.
+    compileOnly("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}") {
+        transitive = false
+    }
+    // SubLevelAccess + Pose3d types live in companion; Sable jarJars it at
+    // runtime, so we only need this for compileOnly.
+    compileOnly("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}") {
+        transitive = false
+    }
+
     // ---- Runtime mods (only present in run tasks, never in the published jar)
     // We use transitive=false to avoid Gradle trying to resolve Create's
     // optional integration deps (FTB Chunks/Teams/Library, JourneyMap, Curios,
@@ -151,6 +177,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             loader_version_range       : loader_version_range,
             create_version_range       : create_version_range,
             cc_tweaked_version_range   : cc_tweaked_version_range,
+            sable_version_range        : sable_version_range,
             mod_id                     : mod_id,
             mod_name                   : mod_name,
             mod_license                : mod_license,

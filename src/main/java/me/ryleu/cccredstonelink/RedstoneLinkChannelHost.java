@@ -4,6 +4,7 @@ import com.simibubi.create.Create;
 import com.simibubi.create.content.redstone.link.IRedstoneLinkable;
 import com.simibubi.create.content.redstone.link.RedstoneLinkNetworkHandler;
 import com.simibubi.create.infrastructure.config.AllConfigs;
+import me.ryleu.cccredstonelink.compat.SableCompat;
 import net.createmod.catnip.data.Couple;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -85,13 +86,21 @@ public final class RedstoneLinkChannelHost {
         // Match Create's own range-gating: only transmitters within linkRange of
         // this bridge's position contribute. Without this, getLinkSignal would
         // pick up transmitters that Create's normal receivers correctly ignore.
-        BlockPos here = owner.pos();
+        //
+        // Both endpoints are routed through SableCompat.toWorldPos so blocks on
+        // a Sable sub-level are compared at their *visual* world position via
+        // the sub-level's logicalPose — same trick Sable's own mixin on
+        // RedstoneLinkNetworkHandler.updateNetworkOf does, but for the read
+        // path. Without it a pocket bridge in the world cannot see a
+        // transmitter that sits on a flying contraption (or vice versa).
+        BlockPos here = SableCompat.toWorldPos(level, owner.pos());
         int range = AllConfigs.server().logistics.linkRange.get();
 
         int power = 0;
         for (Object obj : network) {
             IRedstoneLinkable linkable = (IRedstoneLinkable) obj;
-            if (!here.closerThan(linkable.getLocation(), range)) continue;
+            BlockPos there = SableCompat.toWorldPos(level, linkable.getLocation());
+            if (!here.closerThan(there, range)) continue;
             power = Math.max(power, linkable.getTransmittedStrength());
             if (power >= 15) return 15;
         }
@@ -164,6 +173,7 @@ public final class RedstoneLinkChannelHost {
 
     // ----- Forwarders for RedstoneLinkChannel -----
 
+    /** Raw plot-local position — the convention every {@code IRedstoneLinkable} returns. */
     BlockPos pos() { return owner.pos(); }
 
     boolean isAlive() { return owner.isAlive(); }

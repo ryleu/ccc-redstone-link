@@ -38,3 +38,13 @@ type="required"
 versionRange="${cc_tweaked_version_range}"
 ordering="AFTER"
 side="BOTH"
+
+# Sable is an optional integration dep — we only use it to translate block
+# positions out of Sable sub-levels (contraptions) and into world space so
+# Create's redstone-link range checks work across the sub-level boundary.
+[[dependencies.${mod_id}]]
+modId="sable"
+type="optional"
+versionRange="${sable_version_range}"
+ordering="AFTER"
+side="BOTH"
