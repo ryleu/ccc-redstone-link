@@ -7,8 +7,6 @@ import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.NonNull;
 
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The peripheral exposed by the pocket and turtle upgrades.
@@ -21,10 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RedstoneLinkUpgradePeripheral implements IPeripheral {
 
     private final RedstoneLinkChannelHost channelHost;
-    private final Set<IComputerAccess> computers = ConcurrentHashMap.newKeySet();
 
     public RedstoneLinkUpgradePeripheral(RedstoneLinkChannelHost.LinkHost linkHost) {
-        this.channelHost = new RedstoneLinkChannelHost(new EventForwardingLinkHost(linkHost));
+        this.channelHost = new RedstoneLinkChannelHost(linkHost);
     }
 
     public RedstoneLinkChannelHost channelHost() {
@@ -50,6 +47,7 @@ public class RedstoneLinkUpgradePeripheral implements IPeripheral {
 
     @LuaFunction(mainThread = true)
     public final int watchLinkSignal(
+            IComputerAccess computer,
             String frequency1,
             String frequency2,
             Optional<Integer> color1,
@@ -57,11 +55,12 @@ public class RedstoneLinkUpgradePeripheral implements IPeripheral {
 
         ItemStack first = RedstoneLinkChannelHost.fromFrequencySpec(frequency1, color1.orElse(null));
         ItemStack last  = RedstoneLinkChannelHost.fromFrequencySpec(frequency2, color2.orElse(null));
-        return channelHost.watchLinkSignal(first, last);
+        return channelHost.watchLinkSignal(computer, first, last);
     }
 
     @LuaFunction(mainThread = true)
     public final void unwatchLinkSignal(
+            IComputerAccess computer,
             String frequency1,
             String frequency2,
             Optional<Integer> color1,
@@ -69,7 +68,7 @@ public class RedstoneLinkUpgradePeripheral implements IPeripheral {
 
         ItemStack first = RedstoneLinkChannelHost.fromFrequencySpec(frequency1, color1.orElse(null));
         ItemStack last  = RedstoneLinkChannelHost.fromFrequencySpec(frequency2, color2.orElse(null));
-        channelHost.unwatchLinkSignal(first, last);
+        channelHost.unwatchLinkSignal(computer, first, last);
     }
 
     @LuaFunction(mainThread = true)
@@ -86,43 +85,12 @@ public class RedstoneLinkUpgradePeripheral implements IPeripheral {
     }
 
     @Override
-    public void attach(IComputerAccess computer) {
-        computers.add(computer);
-    }
-
-    @Override
     public void detach(IComputerAccess computer) {
-        computers.remove(computer);
-    }
-
-    private void queueEvent(String event, Object... arguments) {
-        for (IComputerAccess computer : computers) {
-            computer.queueEvent(event, arguments);
-        }
+        channelHost.onComputerDetached(computer);
     }
 
     @Override
     public boolean equals(IPeripheral other) {
         return this == other;
-    }
-
-    private final class EventForwardingLinkHost implements RedstoneLinkChannelHost.LinkHost {
-        private final RedstoneLinkChannelHost.LinkHost delegate;
-
-        private EventForwardingLinkHost(RedstoneLinkChannelHost.LinkHost delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override public net.minecraft.world.level.Level level() { return delegate.level(); }
-
-        @Override public net.minecraft.core.BlockPos pos() { return delegate.pos(); }
-
-        @Override public boolean isAlive() { return delegate.isAlive(); }
-
-        @Override public void markDirty() { delegate.markDirty(); }
-
-        @Override public void queueEvent(String event, Object... arguments) {
-            RedstoneLinkUpgradePeripheral.this.queueEvent(event, arguments);
-        }
     }
 }

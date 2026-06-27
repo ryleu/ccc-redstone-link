@@ -39,7 +39,13 @@ public class RedstoneLinkPocketUpgrade extends AbstractPocketUpgrade {
     @Override
     public void update(@NonNull IPocketAccess access, @Nullable IPeripheral peripheral) {
         if (peripheral instanceof RedstoneLinkUpgradePeripheral linkPeripheral) {
-            linkPeripheral.channelHost().migrateIfNeeded();
+            RedstoneLinkChannelHost host = linkPeripheral.channelHost();
+            host.migrateIfNeeded();
+            // Create's network handler only fires setReceivedStrength when a
+            // *transmitter* changes; a moving pocket bridge would never get
+            // notified about going in / out of a stationary transmitter's
+            // range. Refresh ourselves when the holder has actually moved.
+            host.refreshListenersIfMoved();
         }
     }
 

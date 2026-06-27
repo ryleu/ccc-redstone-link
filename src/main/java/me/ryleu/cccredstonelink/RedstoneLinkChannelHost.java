@@ -4,6 +4,7 @@ import com.simibubi.create.Create;
 import com.simibubi.create.content.redstone.link.IRedstoneLinkable;
 import com.simibubi.create.content.redstone.link.RedstoneLinkNetworkHandler;
 import com.simibubi.create.infrastructure.config.AllConfigs;
+import dan200.computercraft.api.peripheral.IComputerAccess;
 import me.ryleu.cccredstonelink.compat.SableCompat;
 import net.createmod.catnip.data.Couple;
 import net.minecraft.core.BlockPos;
@@ -19,6 +20,7 @@ import net.minecraft.world.item.component.DyedItemColor;
 import net.minecraft.world.level.Level;
 
 import javax.annotation.Nullable;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -57,9 +59,6 @@ public final class RedstoneLinkChannelHost {
 
         /** Notify the host that channel state changed (block entity uses this to call setChanged). */
         default void markDirty() { }
-
-        /** Queue a ComputerCraft event on every attached computer. */
-        default void queueEvent(String event, Object... arguments) { }
     }
 
     private final LinkHost owner;
@@ -67,6 +66,13 @@ public final class RedstoneLinkChannelHost {
 
     @Nullable
     private Level registeredLevel;
+
+    /**
+     * Last effective (Sable-aware) world position seen by {@link #refreshListenersIfMoved()}.
+     * Used to skip work when the owner hasn't moved.
+     */
+    @Nullable
+    private BlockPos lastListenerPos;
 
     public RedstoneLinkChannelHost(LinkHost owner) {
         this.owner = owner;
@@ -87,15 +93,11 @@ public final class RedstoneLinkChannelHost {
         if (network == null) return 0;
 
         // Match Create's own range-gating: only transmitters within linkRange of
-        // this bridge's position contribute. Without this, getLinkSignal would
-        // pick up transmitters that Create's normal receivers correctly ignore.
-        //
-        // Both endpoints are routed through SableCompat.toWorldPos so blocks on
-        // a Sable sub-level are compared at their *visual* world position via
-        // the sub-level's logicalPose — same trick Sable's own mixin on
-        // RedstoneLinkNetworkHandler.updateNetworkOf does, but for the read
-        // path. Without it a pocket bridge in the world cannot see a
-        // transmitter that sits on a flying contraption (or vice versa).
+        // this bridge's position contribute. Both endpoints are routed through
+        // SableCompat.toWorldPos so blocks on a Sable sub-level are compared at
+        // their *visual* world position via the sub-level's logicalPose — same
+        // trick Sable's own mixin on RedstoneLinkNetworkHandler.updateNetworkOf
+        // does, but for the read path.
         BlockPos here = SableCompat.toWorldPos(level, owner.pos());
         int range = AllConfigs.server().logistics.linkRange.get();
 
@@ -119,7 +121,7 @@ public final class RedstoneLinkChannelHost {
         Level level = owner.level();
 
         if (channel == null) {
-            channel = new RedstoneLinkChannel(this, normalizedFirst, normalizedLast, clampStrength(strength), false, true);
+            channel = new RedstoneLinkChannel(this, normalizedFirst, normalizedLast, clampStrength(strength), true);
             channels.put(key, channel);
             owner.markDirty();
             if (level != null && !level.isClientSide) {
@@ -133,7 +135,15 @@ public final class RedstoneLinkChannelHost {
         }
     }
 
-    public int watchLinkSignal(ItemStack first, ItemStack last) {
+    /**
+     * Subscribe {@code computer} to {@code redstone_link_change} events for this
+     * channel. Each computer is tracked independently, so an unwatch by one only
+     * affects events for that computer.
+     *
+     * @return the current signal on the channel — handy for initialising state
+     *         in Lua without a follow-up {@code getLinkSignal} call.
+     */
+    public int watchLinkSignal(IComputerAccess computer, ItemStack first, ItemStack last) {
         ItemStack normalizedFirst = normalize(first);
         ItemStack normalizedLast = normalize(last);
 
@@ -141,19 +151,24 @@ public final class RedstoneLinkChannelHost {
         RedstoneLinkChannel channel = channels.get(key);
         Level level = owner.level();
 
+        boolean justBecameListening;
         if (channel == null) {
-            channel = new RedstoneLinkChannel(this, normalizedFirst, normalizedLast, 0, true, false);
+            channel = new RedstoneLinkChannel(this, normalizedFirst, normalizedLast, 0, false);
             channels.put(key, channel);
+            channel.addSubscriber(computer);
             owner.markDirty();
             if (level != null && !level.isClientSide) {
                 channel.register(level);
                 channel.update();
                 registeredLevel = level;
             }
-        } else if (!channel.isListeningChannel()) {
-            channel.setListening(true);
-            owner.markDirty();
-            channel.update();
+            justBecameListening = true;
+        } else {
+            justBecameListening = channel.addSubscriber(computer);
+            if (justBecameListening) {
+                owner.markDirty();
+                channel.update();
+            }
         }
 
         int current = getLinkSignal(normalizedFirst, normalizedLast);
@@ -161,12 +176,36 @@ public final class RedstoneLinkChannelHost {
         return current;
     }
 
-    public void unwatchLinkSignal(ItemStack first, ItemStack last) {
+    public void unwatchLinkSignal(IComputerAccess computer, ItemStack first, ItemStack last) {
         RedstoneLinkChannel channel = channels.get(channelKey(normalize(first), normalize(last)));
-        if (channel == null || !channel.isListeningChannel()) return;
-        channel.setListening(false);
+        if (channel == null) return;
+        if (!channel.removeSubscriber(computer)) return; // wasn't subscribed, or others still are
+        finishStoppedListening(channel);
+    }
+
+    /**
+     * Called by the peripheral when a computer detaches (logout, chunk unload,
+     * etc.). Drops the computer from every channel's subscriber set.
+     */
+    public void onComputerDetached(IComputerAccess computer) {
+        Iterator<Map.Entry<String, RedstoneLinkChannel>> it = channels.entrySet().iterator();
+        while (it.hasNext()) {
+            RedstoneLinkChannel channel = it.next().getValue();
+            if (!channel.removeSubscriber(computer)) continue;
+            // last subscriber gone — handle teardown inline so we can use the iterator
+            if (!channel.isTransmitting()) {
+                channel.unregister();
+                it.remove();
+            } else {
+                channel.update();
+            }
+            owner.markDirty();
+        }
+    }
+
+    private void finishStoppedListening(RedstoneLinkChannel channel) {
         owner.markDirty();
-        if (channel.shouldRemoveWhenNotListening()) {
+        if (!channel.isTransmitting()) {
             channel.unregister();
             channels.remove(channel.key());
         } else {
@@ -174,9 +213,8 @@ public final class RedstoneLinkChannelHost {
         }
     }
 
-
     private void refreshReceivedStrength(RedstoneLinkChannel channel, ItemStack first, ItemStack last) {
-        if (!channel.isListeningChannel()) return;
+        if (!channel.hasSubscribers()) return;
         channel.setReceivedStrength(getLinkSignal(first, last));
     }
 
@@ -216,6 +254,29 @@ public final class RedstoneLinkChannelHost {
             }
         }
         registeredLevel = level;
+        lastListenerPos = null; // force a listener refresh on the next tick after migration
+    }
+
+    /**
+     * If the owner has moved since this method was last called, re-poll every
+     * listening channel's signal so subscribers receive events when the owner
+     * crosses into / out of a transmitter's range.
+     *
+     * <p>Create's network handler only fires {@link IRedstoneLinkable#setReceivedStrength}
+     * in response to <em>transmitter</em> changes — a moving listener never
+     * triggers that path on its own. Mobile peripherals (pocket / turtle) call
+     * this every tick from their {@code update} hook to close that gap.
+     */
+    public void refreshListenersIfMoved() {
+        Level level = owner.level();
+        if (level == null || level.isClientSide) return;
+        BlockPos cur = SableCompat.toWorldPos(level, owner.pos());
+        if (cur.equals(lastListenerPos)) return;
+        lastListenerPos = cur;
+        for (RedstoneLinkChannel channel : channels.values()) {
+            if (!channel.hasSubscribers()) continue;
+            channel.setReceivedStrength(getLinkSignal(channel.frequencyFirst(), channel.frequencyLast()));
+        }
     }
 
     public boolean isEmpty() {
@@ -231,15 +292,16 @@ public final class RedstoneLinkChannelHost {
 
     void markDirty() { owner.markDirty(); }
 
-    void queueRedstoneLinkChange(ItemStack first, ItemStack last, int oldStrength, int newStrength) {
-        owner.queueEvent(
-                "redstone_link_change",
-                itemIdString(first),
-                itemIdString(last),
-                newStrength,
-                oldStrength,
-                dyeRgbOrNull(first),
-                dyeRgbOrNull(last));
+    void queueRedstoneLinkChange(RedstoneLinkChannel channel, int oldStrength, int newStrength) {
+        ItemStack first = channel.frequencyFirst();
+        ItemStack last = channel.frequencyLast();
+        String f1 = itemIdString(first);
+        String f2 = itemIdString(last);
+        Integer c1 = dyeRgbOrNull(first);
+        Integer c2 = dyeRgbOrNull(last);
+        for (IComputerAccess computer : channel.subscribers()) {
+            computer.queueEvent("redstone_link_change", f1, f2, newStrength, oldStrength, c1, c2);
+        }
     }
 
     // ----- NBT (block entity uses these; mobile upgrades don't persist) -----
@@ -263,7 +325,7 @@ public final class RedstoneLinkChannelHost {
 
     /** Load a single channel — split out so the legacy single-channel format can reuse it. */
     public void addLegacyChannel(ItemStack first, ItemStack last, int strength) {
-        RedstoneLinkChannel channel = new RedstoneLinkChannel(this, first, last, strength, false, true);
+        RedstoneLinkChannel channel = new RedstoneLinkChannel(this, first, last, strength, true);
         channels.put(channel.key(), channel);
     }
 
@@ -289,7 +351,7 @@ public final class RedstoneLinkChannelHost {
             }
         }
 
-        return new RedstoneLinkChannel(this, first, last, tag.getInt("Transmit"), false, true);
+        return new RedstoneLinkChannel(this, first, last, tag.getInt("Transmit"), true);
     }
 
     // ----- Shared item / frequency helpers -----

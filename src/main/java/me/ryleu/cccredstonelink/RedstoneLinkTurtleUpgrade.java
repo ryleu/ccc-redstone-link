@@ -42,7 +42,10 @@ public class RedstoneLinkTurtleUpgrade extends AbstractTurtleUpgrade {
     public void update(@NonNull ITurtleAccess turtle, @NonNull TurtleSide side) {
         IPeripheral peripheral = turtle.getPeripheral(side);
         if (peripheral instanceof RedstoneLinkUpgradePeripheral linkPeripheral) {
-            linkPeripheral.channelHost().migrateIfNeeded();
+            RedstoneLinkChannelHost host = linkPeripheral.channelHost();
+            host.migrateIfNeeded();
+            // Turtles tick this too; same reasoning as the pocket upgrade.
+            host.refreshListenersIfMoved();
         }
     }
 

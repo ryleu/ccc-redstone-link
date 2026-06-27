@@ -3,6 +3,7 @@ package me.ryleu.cccredstonelink;
 import com.simibubi.create.Create;
 import com.simibubi.create.content.redstone.link.IRedstoneLinkable;
 import com.simibubi.create.content.redstone.link.RedstoneLinkNetworkHandler;
+import dan200.computercraft.api.peripheral.IComputerAccess;
 import net.createmod.catnip.data.Couple;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -11,6 +12,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 import javax.annotation.Nullable;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A single (frequency1, frequency2, strength) channel that registers itself with
@@ -25,18 +28,25 @@ final class RedstoneLinkChannel implements IRedstoneLinkable {
     private final ItemStack frequencyLast;
     private int transmittedStrength;
     private int receivedStrength;
-    private boolean listening;
     private boolean transmitting;
+
+    /**
+     * Computers subscribed to {@code redstone_link_change} events on this channel.
+     * Listening (in Create's sense) is derived from "has subscribers" — so multiple
+     * computers can independently watch and unwatch the same frequency pair, and
+     * Create's network handler only stops calling {@link #setReceivedStrength}
+     * when every subscriber is gone.
+     */
+    private final Set<IComputerAccess> subscribers = ConcurrentHashMap.newKeySet();
 
     @Nullable
     private Level registeredLevel;
 
-    RedstoneLinkChannel(RedstoneLinkChannelHost host, ItemStack first, ItemStack last, int strength, boolean listening, boolean transmitting) {
+    RedstoneLinkChannel(RedstoneLinkChannelHost host, ItemStack first, ItemStack last, int strength, boolean transmitting) {
         this.host = host;
         this.frequencyFirst = RedstoneLinkChannelHost.normalize(first);
         this.frequencyLast = RedstoneLinkChannelHost.normalize(last);
         this.transmittedStrength = RedstoneLinkChannelHost.clampStrength(strength);
-        this.listening = listening;
         this.transmitting = transmitting;
     }
 
@@ -87,15 +97,34 @@ final class RedstoneLinkChannel implements IRedstoneLinkable {
         update();
     }
 
-    boolean isListeningChannel() { return listening; }
-
     boolean shouldSave() { return transmitting; }
 
-    boolean shouldRemoveWhenNotListening() { return !transmitting; }
+    boolean isTransmitting() { return transmitting; }
 
-    void setListening(boolean listening) {
-        this.listening = listening;
+    /**
+     * Adds {@code computer} to this channel's subscribers. Returns {@code true}
+     * iff this was the first subscriber (i.e. the channel just transitioned to
+     * listening from Create's perspective — caller should run {@link #update()}).
+     */
+    boolean addSubscriber(IComputerAccess computer) {
+        boolean wasEmpty = subscribers.isEmpty();
+        subscribers.add(computer);
+        return wasEmpty;
     }
+
+    /**
+     * Removes {@code computer}. Returns {@code true} iff it was actually a
+     * subscriber and the set is now empty (i.e. the channel just transitioned
+     * out of listening — caller should decide whether to remove or update it).
+     */
+    boolean removeSubscriber(IComputerAccess computer) {
+        if (!subscribers.remove(computer)) return false;
+        return subscribers.isEmpty();
+    }
+
+    boolean hasSubscribers() { return !subscribers.isEmpty(); }
+
+    Set<IComputerAccess> subscribers() { return subscribers; }
 
     void setReceivedStrengthSilently(int power) {
         this.receivedStrength = RedstoneLinkChannelHost.clampStrength(power);
@@ -109,10 +138,10 @@ final class RedstoneLinkChannel implements IRedstoneLinkable {
         if (newStrength == receivedStrength) return;
         int oldStrength = receivedStrength;
         receivedStrength = newStrength;
-        host.queueRedstoneLinkChange(frequencyFirst, frequencyLast, oldStrength, newStrength);
+        host.queueRedstoneLinkChange(this, oldStrength, newStrength);
     }
 
-    @Override public boolean isListening() { return listening; }
+    @Override public boolean isListening() { return hasSubscribers(); }
 
     @Override public boolean isAlive() { return host.isAlive(); }
 
