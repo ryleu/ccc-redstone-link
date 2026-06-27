@@ -2,9 +2,9 @@
 
 Based on <https://modrinth.com/mod/cc-redstone-link-bridge>. I would have simply contributed the additional feature of adding color support there, but unfortunately that mod is not source available (despite the MIT license on its page).
 
-This mod connects **Create Redstone Link networks** with **CC:Tweaked computers**. It adds a single block, the **CC Redstone Link Bridge**, which can be placed in the world and then used as a ComputerCraft peripheral.
+This mod connects **Create Redstone Link networks** with **CC:Tweaked computers**. It adds the **CC Redstone Link Bridge** as a block, a pocket-computer upgrade, and a turtle upgrade. All three expose the same Lua peripheral interface.
 
-This mod requires **Create** and **CC:Tweaked**.
+This mod requires **Create** and **CC:Tweaked**. [Sable](https://modrinth.com/mod/sable) is an optional dependency. When installed, the bridge works on moving Sable sublevels (Create Aeronautics contraptions, etc.).
 
 ## What the Mod Does
 
@@ -13,7 +13,7 @@ The bridge acts as a small adapter between two systems:
 - **Create** provides the Redstone Link network.
 - **CC:Tweaked** provides Lua control from computers.
 
-With the bridge block in the world, a connected computer can:
+With a bridge in any of its three forms, a connected computer can:
 
 - read the current signal strength of any Redstone Link frequency pair
 - send a signal strength to any Redstone Link frequency pair
@@ -36,6 +36,10 @@ The frequency values are item IDs written as strings. For example, `minecraft:ir
 ## Crafting Recipe
 
 ![The recipe is a 3×3 shaped craft with Redstone Links in all four corners, a Wireless Modem in the center, and Cobblestone in the bottom-middle slot. The three remaining middle-edge slots (top-middle, middle-left, and middle-right) are filled with Create transmitters.](docs/crafting.webp)
+
+The block can be placed on any face of a neighbouring block (top, sides, or ceiling) and will orient toward whichever face you clicked.
+
+To craft the pocket computer or turtle variant, combine a Redstone Link Bridge with a Pocket Computer or Turtle (either tier) via CC:Tweaked's built in upgrade crafting recipe.
 
 ## Lua API
 
